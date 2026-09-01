@@ -1,0 +1,64 @@
+Part 1: Task Scheduling 
+Task 1: Implement Task Scheduling with Cloud Services 
+
+Create a script file using: nano script.sh : 
+nano script.sh
+Add: echo “Hello” 
+
+Open the cron file using the command: crontab -e 
+
+*/1 * * * * ./script.sh >> ./output.log ( Add this in cron file)
+
+tail -f /var/log/syslog | grep CRON
+
+for viewing output : cat /home/ubuntu/output.log
+
+Task 2: Implement Basic Load Balancing
+sudo apt install haproxy -y
+sudo nano /etc/haproxy/haproxy.cfg 
+
+Inside that file:
+frontend http_front
+  bind *:80
+  default_backend http_back
+backend http_back
+  balance roundrobin
+  server vm1 <VM1_IP>:80 check
+  server vm2 <VM2_IP>:80 check
+  server vm3 <VM3_IP>:80 check
+
+later,
+sudo systemctl restart haproxy
+sudo systemctl enable haproxy
+sudo systemctl status haproxy
+
+http://<load_balancer_IP>
+
+
+Part 3: Advanced Scheduling and Load Balancing (Optional)
+Task 1: Implement Advanced Scheduling with Prioritization
+
+script1.sh
+#!/bin/bash
+echo "Running CPU-intensive task in script 1"
+
+for i in {1..1000000}; do
+    echo -n "" > /dev/null
+done
+
+
+script2.sh
+#!/bin/bash
+echo "Logging system information in script 2"
+date >> ./logfile.log
+
+
+chmod +x script.sh
+chmod +x script2.sh
+
+crontab -e
+inside that file
+*/1 * * * * nice -n 10 ./script.sh >> ./output-pr.log
+*/1 * * * * nice -n -5 ./script2.sh >> ./output-pr.log
+
+cat output-pr.log
