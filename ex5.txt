@@ -1,0 +1,41 @@
+Part 1: Virtual Instances Management
+
+Task 1: Create and Configure Virtual Instances
+sudo apt update
+sudo apt install apache2 -y
+sudo systemctl enable apache2
+sudo systemctl status apache2
+sudo nano /var/www/html/index.html (make changes in this file)
+sudo apt install net-tools
+ifconfig
+
+Task 2: Implement Basic Load Balancing
+sudo apt install haproxy -y
+sudo nano /etc/haproxy/haproxy.cfg 
+
+Inside that file:
+frontend http_front
+  bind *:80
+  default_backend http_back
+backend http_back
+  balance roundrobin
+  server vm1 <VM1_IP>:80 check
+  server vm2 <VM2_IP>:80 check
+  server vm3 <VM3_IP>:80 check
+
+later,
+sudo systemctl restart haproxy
+sudo systemctl enable haproxy
+sudo systemctl status haproxy
+
+http://<load_balancer_IP>
+
+
+
+Part 3: Fault Tolerance
+
+Task 1: Implement Fault-Tolerant Design
+rsync -av /source_directory/ user@backup_vm_ip:/destination_directory
+
+
+
