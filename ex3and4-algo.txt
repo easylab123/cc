@@ -1,0 +1,54 @@
+Exercise 3
+## Task 2 – Distributed Mutual Exclusion
+
+### A. Ricart-Agrawala Algorithm
+
+1. Each process keeps a **logical clock**.
+2. When a process wants to enter the CS, it increases its clock and sends a **REQUEST** to all other processes.
+3. Other processes send a **REPLY** if they are not using or waiting for the CS.
+4. If another process has a higher-priority request, the reply is **delayed**.
+5. The process enters the CS after receiving **REPLY from everyone**.
+6. After leaving the CS, it sends all the **delayed replies**.
+
+### B. Token Ring Algorithm
+
+1. Arrange all processes in a **ring**.
+2. A single **token** moves from one process to the next.
+3. A process can enter the CS only when it **has the token**.
+4. If it needs the CS, it uses the token and performs its work.
+5. After finishing, it **passes the token** to the next process.
+6. The token keeps moving around the ring continuously.
+
+### C. Centralized Coordinator Algorithm
+
+1. Choose one process as the **coordinator**.
+2. A process that wants the CS sends a **REQUEST** to the coordinator.
+3. If the CS is free, the coordinator sends **GRANT**.
+4. The process enters and uses the CS.
+5. After finishing, it sends **RELEASE** to the coordinator.
+6. The coordinator gives permission to the **next waiting process**.
+
+
+
+Exercise 4
+## Task 1: Lamport's Logical Clock
+
+1. Start the clock at **0** for each process.
+2. Increase the clock by **1** for every event.
+3. Before sending a message, increase the clock and add the **timestamp**.
+4. Send the message with the timestamp.
+5. When receiving a message, compare the **local clock** with the received timestamp.
+6. Set the clock to **max(local clock, received timestamp) + 1**.
+7. Display the clock value after each event.
+
+## Task 2: Vector Clock
+
+1. Start a vector of **0s** for each process.
+2. Increase the process's own value by **1** for every event.
+3. Before sending a message, increase its own value and attach the **vector clock**.
+4. Send the message with the vector timestamp.
+5. When receiving a message, compare the **local vector** with the received vector.
+6. Take the **maximum value** at each position.
+7. Increase the receiver's own value by **1**.
+8. Display the vector clock after each event.
+
