@@ -9,4 +9,4 @@
 4-2 vector clock
 5 Virtual Instances Management, Server Consolidation, Fault Tolerance 
 6 Task Scheduling,  Load Balancing, Advanced Scheduling and Load Balancing (Optional)
-
+7 Hypervisor
