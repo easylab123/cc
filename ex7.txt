@@ -1,0 +1,59 @@
+No. I included the main commands, but your PDF also contains cluster verification, HA testing, load balancing, and VM migration. Here is the complete command list in your requested format, based on your Exercise 7 PDF.
+
+Part 1: Setting Up a Hypervisor Cluster
+
+Task 1: Set Up Hypervisor Hosts
+
+Create two or more VMs in VMware Workstation and install Proxmox VE on each.
+
+apt update
+
+ip a
+
+ping
+
+Task 2: Configure Hypervisor Clustering
+
+In the Proxmox web interface: Datacenter → Cluster → Create Cluster (on the first host)
+
+Join Cluster (on the second host)
+
+pvecm status
+
+pvecm nodes
+
+ping
+
+ping
+
+Part 2: Implement High Availability and Load Balancing
+
+Task 1: Configure High Availability for VMs
+
+In the Proxmox web interface: Datacenter → HA
+
+Add the VMs that should restart automatically when a host fails.
+
+ha-manager status
+
+pvecm status
+
+qm list
+
+Test HA by powering down one hypervisor host and checking whether the VM restarts on another host.
+
+Task 2: Implement Load Balancing
+
+qm list
+
+pvecm nodes
+
+free -h
+
+top
+
+In the Proxmox web interface: Configure resource distribution policies and monitor CPU and memory usage.
+
+To migrate a VM manually:
+
+qm migrate
