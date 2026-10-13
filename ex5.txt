@@ -31,11 +31,266 @@ sudo systemctl status haproxy
 http://<load_balancer_IP>
 
 
-
-Part 3: Fault Tolerance
-
-Task 1: Implement Fault-Tolerant Design
-rsync -av /source_directory/ user@backup_vm_ip:/destination_directory
+----------------------------------------------------------------------------------------------------------------------------------
 
 
 
+
+
+
+Part 2: Server Consolidation in VirtualBox – Simple Demonstration
+Aim: To consolidate services from two virtual machines into one VM, reduce resource usage, and verify that the service works correctly.
+Procedure
+Step 1: Open VirtualBox and identify VMs
+1. Open Oracle VirtualBox Manager.
+2. Identify two VMs: Ubuntu Server 1 and Ubuntu Server 2.
+3. Open each VM's Settings → System and note the allocated RAM and CPU.
+Step 2: Select the main VM
+Choose Ubuntu Server 1 as the consolidated server. It will host the website previously running on Server 2.
+Step 3: Install Apache and SSH
+On both VMs, open Terminal and run:
+sudo apt update
+sudo apt install apache2 openssh-server -y
+
+
+On Server 2, start SSH:
+sudo systemctl enable --now ssh
+
+
+Step 4: Create a website on Server 2
+On Ubuntu Server 2, run:
+echo "Website migrated from Server 2" > ~/index.html
+
+
+Find Server 2's IP address:
+hostname -I
+
+
+Note the IP address and the Ubuntu username of Server 2.
+Step 5: Migrate the website using SCP
+On Ubuntu Server 1, run the following command, replacing username and SERVER2_IP with the actual details of Server 2:
+scp username@SERVER2_IP:~/index.html /tmp/index.html
+
+
+Enter Server 2's password when prompted.
+Copy the transferred file into Apache's website directory:
+sudo cp /tmp/index.html /var/www/html/index.html
+
+
+Restart Apache:
+sudo systemctl restart apache2
+
+
+Step 6: Test the migrated website
+On Server 1, run:
+curl http://localhost
+
+
+Expected output:
+Website migrated from Server 2
+
+
+The website file has now been transferred to Server 1 and is being served by its Apache service.
+Step 7: Stop the old service
+After confirming the website works on Server 1, stop Apache on Server 2:
+sudo systemctl stop apache2
+
+
+Check that the website still works on Server 1:
+curl http://localhost
+
+
+Step 8: Check resource utilization
+On Server 1, run the following commands:
+Check CPU usage:
+top
+
+
+Check memory usage:
+free -h
+
+
+Check disk usage:
+df -h
+
+
+These commands display CPU activity, memory availability and disk utilization.
+Step 9: Power off and remove the unused VM
+1. Shut down Ubuntu Server 2.
+2. Keep it until you have verified the migration and backed up any required data.
+3. In VirtualBox Manager, right-click Server 2 and select Remove.
+4. Choose Remove Only to retain the VM files.
+Expected Result
+- Two VMs' workloads are consolidated onto one VM.
+- The website from Server 2 is migrated to Server 1 using SCP.
+- The website continues to work after the old Apache service is stopped.
+- CPU, memory and disk utilization are checked on the consolidated VM.
+- The redundant VM can be safely retired.
+Conclusion: Server consolidation was demonstrated by migrating a website from Ubuntu Server 2 to Ubuntu Server 1, verifying its operation, and monitoring the consolidated VM's resource utilization.
+
+
+
+
+----------------------------------------------------------------------------------------------------------------------------------
+
+
+
+
+# Part 3: Fault Tolerance in VirtualBox – Simple Notes
+
+Aim: To implement fault tolerance using VM cloning, data synchronization, and snapshots in Oracle VirtualBox.
+
+## Step 1: Create a Backup VM (Clone)
+
+1. Open VirtualBox Manager.
+2. Select the primary Ubuntu VM.
+3. Right-click and select Clone.
+4. Enter the name `Ubuntu-Backup`.
+5. Select Full Clone.
+6. Click Finish.
+
+Result: A separate backup VM is created.
+
+## Step 2: Synchronize Data Using rsync
+
+On both VMs, install SSH and rsync:
+
+
+sudo apt update
+sudo apt install openssh-server rsync -y
+
+
+On the Backup VM, start SSH:
+
+
+sudo systemctl enable --now ssh
+
+
+Find the Backup VM's IP address:
+
+
+hostname -I
+
+
+On the Primary VM, create a sample file:
+
+
+mkdir -p ~/important
+echo "Important backup data" > ~/important/data.txt
+
+
+Synchronize the file to the Backup VM. Replace `username` and `BACKUP_IP` with the actual details:
+
+
+rsync -av ~/important/ username@BACKUP_IP:~/important/
+
+
+On the Backup VM, verify the copied file:
+
+
+cat ~/important/data.txt
+
+
+Expected output:
+
+
+Important backup data
+
+
+Result: Data is copied from the Primary VM to the Backup VM.
+
+## Step 3: Take a Snapshot
+
+1. Open VirtualBox Manager.
+2. Select the Primary VM.
+3. Open the Snapshots view.
+4. Click Take.
+5. Enter the name `Pre-Consolidation Snapshot`.
+6. Click OK.
+
+Result: A snapshot of the VM's current state is saved.
+
+## Step 4: Test Snapshot Recovery
+
+Modify the file on the Primary VM:
+
+
+echo "Modified data" > ~/important/data.txt
+
+
+Restore the earlier snapshot:
+
+1. Shut down the VM.
+2. Open VirtualBox Manager and select the VM.
+3. Go to Snapshots.
+4. Select `Pre-Consolidation Snapshot`.
+5. Click Restore and confirm.
+6. Start the VM again.
+
+Check the file:
+
+
+cat ~/important/data.txt
+
+
+Expected output:
+
+
+Important backup data
+
+
+Result: The VM is restored to its earlier state.
+
+## Step 5: Test Backup Recovery
+
+1. Shut down the Primary VM.
+2. Start `Ubuntu-Backup`.
+3. Check the backup file:
+
+
+cat ~/important/data.txt
+
+
+4\. Confirm that the backup data is accessible.
+
+Result: The backup VM can be used if the primary VM fails.
+
+## Expected Result
+
+- A backup VM is created using Full Clone.
+- Data is synchronized using `rsync`.
+- Snapshots are created for quick recovery.
+- The primary VM can be restored to an earlier state.
+- The backup VM provides a recovery option if the primary VM fails.
+
+Conclusion: Fault tolerance is demonstrated using VM cloning, data synchronization, and snapshot-based recovery in VirtualBox.
+
+
+
+
+
+
+--------------------------------------------------------------------------------------------------------------------------------
+
+
+
+
+
+
+Use these commands in order to remove the duplicate IP and assign the correct IP address.
+
+ip -br addr
+sudo ip addr del 192.168.156.131/24 dev enp0s3
+sudo ip addr add 192.168.156.132/24 dev enp0s3
+sudo ip link set enp0s3 up
+ip -br addr
+
+Replace these values as needed:
+
+192.168.156.131/24 — the IP address you want to remove.
+
+192.168.156.132/24 — the IP address you want to assign.
+
+enp0s3 — your actual network interface name.
+
+Important: If both VMs are using the same IP, assign a unique IP to each VM. Do not assign .132 if another VM already uses it. These changes are temporary and may be lost after a reboot.
