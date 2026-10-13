@@ -57,3 +57,58 @@ In the Proxmox web interface: Configure resource distribution policies and monit
 To migrate a VM manually:
 
 qm migrate
+
+
+
+
+
+
+------------------------------------------------------------------------------------------------------------------------
+
+
+(VM1 - pve VM2 - pve2)
+
+Task 1: clustering
+
+first install hypervisor
+in both vms
+
+then in each vm:
+hostname -I
+
+then in browser:
+https://<1st VM IP>:8006
+click on advanced, continue to, and go to proxmox
+
+type username (root) and password and enter proxmox
+
+go to datacenter -> cluster -> create cluster -> cluster name (cloud) -> create (wait till TASK OK comes)
+go to join information -> copy the join information -> https://<2nd VM IP>:8006 -> same as above -> datacenter -> cluster -> join cluster -> paste the join information -> type the password -> then go to 1st VM's proxmox and check if the join is successful
+
+now in VMware:
+in 1st VM:
+ping <2nd VM IP>
+
+
+Task 2: implement High Availability (HA) and load balancing
+
+back to browser for 1st VM:
+right click on pve -> create VM - > name it vm1 -> in OS select Don't use any media -> in Disk change RAM to 2GB -> next next finish  -> repeat for pve2 (right click on pve2 -> create VM - > name it vm2 -> in OS select Don't use any media -> in Disk change RAM to 2GB -> next next finish)
+
+click on datacenter -> HA -> add -> choose vm1 (ensure request state is started) -> add -> repeat for 2nd vm (vm2)
+
+both VMs quorum status is OK
+
+in HA page -> CIRS Settings
+HA -> affinity rules -> HA Node Affinity Rule -> Add -> Enable ticked, strict unticked -> 1st vm (vm1) as resource, tick 1st pve and set priority as 2 -> then tick pve2 and set priority 1 -> Add
+repeat the same for next vm as resource (vm2)
+
+datacenter -> summary 
+
+HA -> Affinity Rules -> Untick enable for both of the vms before migration
+
+
+Task 3: Migrating VM
+
+datacenter -> expand pve -> right click vm1 -> migrate -> target is pve2 -> migrate
+checking: HA -> vm1 will be in pve2
