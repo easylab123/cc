@@ -744,6 +744,18 @@ Important: This runs the script every minute. It does not run just once. For a l
 cat output.log
 
 
+In vm...exam portal load balancing... apply least loaded or least connected load balancing strategy:
+Instead of balance roundrobin use balance leastconn
+
+frontend web
+    bind *:80
+    default_backend servers
+
+backend servers
+    balance leastconn
+    server s1 127.0.0.1:8081 check
+    server s2 127.0.0.1:8082 check
+    server s3 127.0.0.1:8083 check
 
 
 
