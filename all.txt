@@ -1,335 +1,548 @@
 Exercise 1: Inter-Process Communication in Distributed Computing
+
+
 Task 1: Setup Basic Client-Server Communication
+
+
 server.py:
 import socket
+
+
 s = socket.socket()
 s.bind(("127.0.0.1", 5000))
 s.listen()
 c, addr = s.accept()
+
+
 nums = list(map(int, c.recv(1024).decode().split()))
 c.send(f"Sum = {sum(nums)}".encode())
+
+
 c.close()
 s.close()
+
+
 client.py:
 import socket
+
+
 c = socket.socket()
 c.connect(("127.0.0.1", 5000))
+
+
 c.send(input("Enter numbers: ").encode())
 print(c.recv(1024).decode())
+
+
 c.close()
+
+
 Task 2: Enhanced Communication with Object Serialization
+
+
 data_obj.py:
 class DataObject:
-def __init__(self, name, values):
-self.name, self.values = name, values
+    def __init__(self, name, values):
+        self.name, self.values = name, values
+
+
 server.py:
 import socket, pickle
+
+
 s = socket.socket()
 s.bind(("127.0.0.1", 5001))
 s.listen()
 c, _ = s.accept()
+
+
 obj = pickle.loads(c.recv(4096))
 c.send(pickle.dumps(f"Hello {obj.name}, Sum = {sum(obj.values)}"))
+
+
 c.close()
 s.close()
+
+
 client.py:
 import socket, pickle
 from data_object import DataObject
+
+
 c = socket.socket()
 c.connect(("127.0.0.1", 5001))
+
+
 obj = DataObject(input("Name: "),
-list(map(int, input("Numbers: ").split())))
+                 list(map(int, input("Numbers: ").split())))
 c.send(pickle.dumps(obj))
 print(pickle.loads(c.recv(4096)))
+
+
 c.close()
+
+
+________________
+
+
 Exercise 2: Remote Method Invocation (RMI): Basic Client-Server Communication
+
+
 server.py:
 import Pyro4
+
+
 @Pyro4.expose
 class Calculator:
-def add_numbers(self, a, b): return a + b
-def multiply(self, a, b): return a * b
+    def add_numbers(self, a, b): return a + b
+    def multiply(self, a, b): return a * b
+
+
 d = Pyro4.Daemon()
 uri = d.register(Calculator)
 print("URI:", uri)
 d.requestLoop()
+
+
 client.py:
 import Pyro4
+
+
 c = Pyro4.Proxy(input("Enter URI: "))
 a, b = map(int, input("Enter two numbers: ").split())
+
+
 print("Addition =", c.add_numbers(a, b))
 print("Multiplication =", c.multiply(a, b))
-Exercise 3: Message passing and distributed mutual exclusion
+
+
+________________
+
+
+Exercise 3: Message passing and distributed mutual exclusion 
+
+
 Task 1: Message Passing System
+
+
 server.py:
 import socket, threading
+
+
 s = socket.socket()
 s.bind(("127.0.0.1", 8000))
 s.listen()
 clients = []
+
+
 def handle(c):
+    while True:
+        try:
+            m = c.recv(1024)
+            if not m: break
+            for x in clients:
+                if x != c: x.sendall(m)
+        except: break
+    if c in clients: clients.remove(c)
+    c.close()
+
+
 while True:
-try:
-m = c.recv(1024)
-if not m: break
-for x in clients:
-if x != c: x.sendall(m)
-except: break
-if c in clients: clients.remove(c)
-c.close()
-while True:
-c, _ = s.accept()
-clients.append(c)
-threading.Thread(target=handle, args=(c,), daemon=True).start()
+    c, _ = s.accept()
+    clients.append(c)
+    threading.Thread(target=handle, args=(c,), daemon=True).start()
+
+
 client.py:
 import socket, threading
+
+
 c = socket.socket()
 c.connect(("127.0.0.1", 8000))
+
+
 def receive():
-while True:
-try: print(c.recv(1024).decode())
-except: break
+    while True:
+        try: print(c.recv(1024).decode())
+        except: break
+
+
 threading.Thread(target=receive, daemon=True).start()
+
+
 while True:
-c.sendall(input().encode())
+    c.sendall(input().encode())
+
+
 Task 2: Distributed Mutual Exclusion:
-A. Ricart-Agrawala Algorithm:
+
+
+1. Ricart-Agrawala Algorithm:
 import threading, queue, time
+
+
 N = 3
 q = [queue.Queue() for _ in range(N)]
+
+
 def process(p):
-clock, ts = 0, 0
-requesting, in_cs = False, False
-pending, deferred = set(), []
-lock = threading.Lock()
-event = threading.Event()
-def listen():
-nonlocal clock
-while True:
-m = q[p].get()
-with lock:
-if m[0] == "REQ":
-_, t, j = m
-clock = max(clock, t) + 1
-if in_cs or (requesting and (ts, p) < (t, j)):
-deferred.append(j)
-else:
-clock += 1
-q[j].put(("REP", p, clock))
-else:
-clock = max(clock, m[2]) + 1
-pending.discard(m[1])
-if not pending:
-event.set()
-threading.Thread(target=listen, daemon=True).start()
-for _ in range(2):
-with lock:
-clock += 1
-ts, requesting = clock, True
-pending = set(range(N)) - {p}
-event.clear()
-for j in pending:
-q[j].put(("REQ", ts, p))
-event.wait()
-with lock:
-in_cs = True
-print(f"P{p} enters CS")
-time.sleep(0.1)
-print(f"P{p} leaves CS")
-with lock:
-in_cs, requesting = False, False
-for j in deferred:
-clock += 1
-q[j].put(("REP", p, clock))
-deferred.clear()
+    clock, ts = 0, 0
+    requesting, in_cs = False, False
+    pending, deferred = set(), []
+    lock = threading.Lock()
+    event = threading.Event()
+
+
+    def listen():
+        nonlocal clock
+        while True:
+            m = q[p].get()
+            with lock:
+                if m[0] == "REQ":
+                    _, t, j = m
+                    clock = max(clock, t) + 1
+
+
+                    if in_cs or (requesting and (ts, p) < (t, j)):
+                        deferred.append(j)
+                    else:
+                        clock += 1
+                        q[j].put(("REP", p, clock))
+                else:
+                    clock = max(clock, m[2]) + 1
+                    pending.discard(m[1])
+                    if not pending:
+                        event.set()
+
+
+    threading.Thread(target=listen, daemon=True).start()
+
+
+    for _ in range(2):
+        with lock:
+            clock += 1
+            ts, requesting = clock, True
+            pending = set(range(N)) - {p}
+            event.clear()
+
+
+            for j in pending:
+                q[j].put(("REQ", ts, p))
+
+
+        event.wait()
+
+
+        with lock:
+            in_cs = True
+
+
+        print(f"P{p} enters CS")
+        time.sleep(0.1)
+        print(f"P{p} leaves CS")
+
+
+        with lock:
+            in_cs, requesting = False, False
+            for j in deferred:
+                clock += 1
+                q[j].put(("REP", p, clock))
+            deferred.clear()
+
+
 threads = [threading.Thread(target=process, args=(p,)) for p in range(N)]
+
+
 for t in threads:
-t.start()
+    t.start()
 for t in threads:
-t.join()
+    t.join()
+
+
 print("Ricart-Agrawala complete")
+
+
+
+
 Shorter Version:
 import threading, queue, time
+
+
 N = 3
 q = [queue.Queue() for _ in range(N)]
+
+
 def process(p):
-clock, ts, deferred = 0, 0, []
-pending, requesting = set(), False
-lock, event = threading.Lock(), threading.Event()
-def listen():
-nonlocal clock, requesting, ts
-while True:
-m = q[p].get()
-with lock:
-if m[0] == "REQ":
-_, t, j = m
-clock = max(clock, t) + 1
-defer = requesting and (ts, p) < (t, j)
-if defer:
-deferred.append(j)
-else:
-q[j].put(("REP", p))
-else:
-pending.discard(m[1])
-if not pending:
-event.set()
-threading.Thread(target=listen, daemon=True).start()
-for _ in range(2):
-with lock:
-clock += 1
-ts, requesting = clock, True
-pending = set(range(N)) - {p}
-event.clear()
-for j in pending:
-q[j].put(("REQ", ts, p))
-event.wait()
-print(f"P{p} enters CS")
-time.sleep(0.2)
-print(f"P{p} leaves CS")
-with lock:
-requesting = False
-for j in deferred:
-q[j].put(("REP", p))
-deferred.clear()
+    clock, ts, deferred = 0, 0, []
+    pending, requesting = set(), False
+    lock, event = threading.Lock(), threading.Event()
+
+
+    def listen():
+        nonlocal clock, requesting, ts
+        while True:
+            m = q[p].get()
+            with lock:
+                if m[0] == "REQ":
+                    _, t, j = m
+                    clock = max(clock, t) + 1
+                    defer = requesting and (ts, p) < (t, j)
+                    if defer:
+                        deferred.append(j)
+                    else:
+                        q[j].put(("REP", p))
+                else:
+                    pending.discard(m[1])
+                    if not pending:
+                        event.set()
+
+
+    threading.Thread(target=listen, daemon=True).start()
+
+
+    for _ in range(2):
+        with lock:
+            clock += 1
+            ts, requesting = clock, True
+            pending = set(range(N)) - {p}
+            event.clear()
+            for j in pending:
+                q[j].put(("REQ", ts, p))
+        event.wait()
+
+
+        print(f"P{p} enters CS")
+        time.sleep(0.2)
+        print(f"P{p} leaves CS")
+
+
+        with lock:
+            requesting = False
+            for j in deferred:
+                q[j].put(("REP", p))
+            deferred.clear()
+
+
 ts = [threading.Thread(target=process, args=(p,)) for p in range(N)]
 for t in ts: t.start()
 for t in ts: t.join()
+
+
 Ultra Shorter Version (WORST CASE SCENARIO):
 def ricart_agrawala(n, requests):
-replies = [0] * n
-for p, timestamp in sorted(requests, key=lambda x: (x[1], x[0])):
-replies[p] = n - 1
-print(f"P{p} broadcasts REQUEST({timestamp})")
-print(f"P{p} receives {replies[p]} REPLY messages")
-print(f"P{p} enters and exits CS")
-B. Token Ring Algorithm:
+    replies = [0] * n
+    for p, timestamp in sorted(requests, key=lambda x: (x[1], x[0])):
+        replies[p] = n - 1
+        print(f"P{p} broadcasts REQUEST({timestamp})")
+        print(f"P{p} receives {replies[p]} REPLY messages")
+        print(f"P{p} enters and exits CS")
+
+
+
+
+2. Token Ring Algorithm:
 import threading, queue, time, random
+
+
 N = 5
 q = [queue.Queue() for _ in range(N)]
+
+
 def process(pid):
-for _ in range(3):
-q[pid].get()
-print(f"P{pid} received token")
-if random.random() < 0.6:
-print(f"P{pid} enters CS")
-time.sleep(0.2)
-print(f"P{pid} leaves CS")
-q[(pid + 1) % N].put("TOKEN")
+    for _ in range(3):
+        q[pid].get()
+        print(f"P{pid} received token")
+
+
+        if random.random() < 0.6:
+            print(f"P{pid} enters CS")
+            time.sleep(0.2)
+            print(f"P{pid} leaves CS")
+
+
+        q[(pid + 1) % N].put("TOKEN")
+
+
 threads = [threading.Thread(target=process, args=(i,)) for i in range(N)]
 for t in threads:
-t.start()
+    t.start()
+
+
 q[0].put("TOKEN")
+
+
 for t in threads:
-t.join()
+    t.join()
+
+
 print("Token ring complete")
+
+
 Shorter Version (WORST CASE SCENARIO):
 def token_ring(n, requests):
-token = 0
-for p in requests:
-print(f"P{p} sends REQUEST")
-while token != p:
-token = (token + 1) % n
-print(f"Token reaches P{p}: enters and exits CS")
-token = (p + 1) % n
-C. Centralized Coordinator Algorithm:
+    token = 0
+    for p in requests:
+        print(f"P{p} sends REQUEST")
+        while token != p:
+            token = (token + 1) % n
+        print(f"Token reaches P{p}: enters and exits CS")
+        token = (p + 1) % n
+
+
+
+
+3. Centralized Coordinator Algorithm:
 import threading, queue, time
+
+
 N = 3
 coord = queue.Queue()
 q = [queue.Queue() for _ in range(N)]
+
+
 def coordinator():
-busy, waiting = False, []
-while True:
-msg, p = coord.get()
-if msg == "REQ":
-if not busy:
-busy = True
-q[p].put("GRANT")
-else:
-waiting.append(p)
-elif waiting:
-q[waiting.pop(0)].put("GRANT")
-else:
-busy = False
+    busy, waiting = False, []
+    while True:
+        msg, p = coord.get()
+        if msg == "REQ":
+            if not busy:
+                busy = True
+                q[p].put("GRANT")
+            else:
+                waiting.append(p)
+        elif waiting:
+            q[waiting.pop(0)].put("GRANT")
+        else:
+            busy = False
+
+
 def process(p):
-for _ in range(2):
-coord.put(("REQ", p))
-q[p].get()
-print(f"P{p} enters CS")
-time.sleep(0.1)
-print(f"P{p} leaves CS")
-coord.put(("REL", p))
+    for _ in range(2):
+        coord.put(("REQ", p))
+        q[p].get()
+        print(f"P{p} enters CS")
+        time.sleep(0.1)
+        print(f"P{p} leaves CS")
+        coord.put(("REL", p))
+
+
 threading.Thread(target=coordinator, daemon=True).start()
 ts = [threading.Thread(target=process, args=(p,)) for p in range(N)]
 for t in ts: t.start()
 for t in ts: t.join()
+
+
+
+
 Shorter Version (WORST CASE SCENARIO):
 def centralized(n, requests):
-coordinator = 0
-for p in requests:
-print(f"P{p} sends REQUEST to coordinator P{coordinator}")
-print(f"Coordinator GRANTS access to P{p}")
-print(f"P{p} enters and exits CS")
-print(f"P{p} sends RELEASE")
+    coordinator = 0
+    for p in requests:
+        print(f"P{p} sends REQUEST to coordinator P{coordinator}")
+        print(f"Coordinator GRANTS access to P{p}")
+        print(f"P{p} enters and exits CS")
+        print(f"P{p} sends RELEASE")
+
+
 print("Ricart-Agrawala")
 ricart_agrawala(3, [(0, 2), (1, 1), (2, 3)])
+
+
 print("\nToken Ring")
 token_ring(3, [1, 2, 0])
+
+
 print("\nCentralized Coordinator")
 centralized(3, [1, 2, 0])
+________________
+
+
 Exercise 4: Lamport’s Logical Clock and Vector Clocks:
+
+
 Task 1: Lamport's Logical Clock:
 class LamportClock:
-def __init__(self, process_id):
-self.process_id = process_id
-self.clock = 0
-def event(self):
-self.clock += 1
-print(f"Process {self.process_id} - Internal event "
-f"with Timestamp {self.clock}")
-def send_message(self, receiver):
-self.clock += 1
-print(f"Process {self.process_id} sends a message "
-f"to Process {receiver.process_id} "
-f"with Timestamp {self.clock}")
-receiver.receive_message(self.process_id, self.clock)
-def receive_message(self, sender_id, sender_timestamp):
-self.clock = max(self.clock, sender_timestamp) + 1
-print(f"Process {self.process_id} received a message "
-f"from Process {sender_id} with updated "
-f"Timestamp {self.clock}")
+    def __init__(self, process_id):
+        self.process_id = process_id
+        self.clock = 0
+
+
+    def event(self):
+        self.clock += 1
+        print(f"Process {self.process_id} - Internal event "
+              f"with Timestamp {self.clock}")
+
+
+    def send_message(self, receiver):
+        self.clock += 1
+        print(f"Process {self.process_id} sends a message "
+              f"to Process {receiver.process_id} "
+              f"with Timestamp {self.clock}")
+        receiver.receive_message(self.process_id, self.clock)
+
+
+    def receive_message(self, sender_id, sender_timestamp):
+        self.clock = max(self.clock, sender_timestamp) + 1
+        print(f"Process {self.process_id} received a message "
+              f"from Process {sender_id} with updated "
+              f"Timestamp {self.clock}")
+
+
+
+
 process1 = LamportClock(1)
 process2 = LamportClock(2)
+
+
 process1.event()
 process1.send_message(process2)
 process2.event()
 process2.send_message(process1)
+
+
+
+
 Task 2: Vector Clocks:
 class VectorClock:
-def __init__(self, process_id, num_processes):
-self.process_id = process_id
-self.num_processes = num_processes
-self.vector = [0] * num_processes
-def event(self):
-self.vector[self.process_id] += 1
-print(f"Process {self.process_id} - Internal event "
-f"with Updated Vector {self.vector}")
-def send_message(self, receiver):
-self.vector[self.process_id] += 1
-print(f"Process {self.process_id} sends a message "
-f"to Process {receiver.process_id} "
-f"with Updated Vector {self.vector}")
-receiver.receive_message(self.process_id, self.vector.copy())
-def receive_message(self, sender_id, sender_vector):
-for i in range(self.num_processes):
-self.vector[i] = max(self.vector[i], sender_vector[i])
-self.vector[self.process_id] += 1
-print(f"Process {self.process_id} received a message "
-f"from Process {sender_id} with Updated "
-f"Vector {self.vector}")
+    def __init__(self, process_id, num_processes):
+        self.process_id = process_id
+        self.num_processes = num_processes
+        self.vector = [0] * num_processes
+
+
+    def event(self):
+        self.vector[self.process_id] += 1
+        print(f"Process {self.process_id} - Internal event "
+              f"with Updated Vector {self.vector}")
+
+
+    def send_message(self, receiver):
+        self.vector[self.process_id] += 1
+        print(f"Process {self.process_id} sends a message "
+              f"to Process {receiver.process_id} "
+              f"with Updated Vector {self.vector}")
+        receiver.receive_message(self.process_id, self.vector.copy())
+
+
+    def receive_message(self, sender_id, sender_vector):
+        for i in range(self.num_processes):
+            self.vector[i] = max(self.vector[i], sender_vector[i])
+
+
+        self.vector[self.process_id] += 1
+        print(f"Process {self.process_id} received a message "
+              f"from Process {sender_id} with Updated "
+              f"Vector {self.vector}")
+
+
+
+
 # Create Processes
 process1 = VectorClock(0, 3)
 process2 = VectorClock(1, 3)
 process3 = VectorClock(2, 3)
+
+
 # Simulate Events
 process1.event()
 process1.send_message(process2)
@@ -337,11 +550,34 @@ process2.event()
 process2.send_message(process3)
 process3.send_message(process1)
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+________________
+
+
 Extra questions in lab exam:
+
 Client-server file statistics:
-The client sends a filename to the server. The server checks whether the file
-exists and returns the number of lines, number of words, and size of the file
-to the client.
+The client sends a filename to the server. The server checks whether the file exists and returns the number of lines, number of words, and size of the file to the client.
 server.py
 import socket
 import os
@@ -352,14 +588,14 @@ print("Server is waiting for client...")
 conn, addr = server.accept()
 filename = conn.recv(1024).decode()
 if os.path.isfile(filename):
-with open(filename, "r") as f:
-data = f.read()
-lines = len(data.splitlines())
-words = len(data.split())
-size = os.path.getsize(filename)
-result = f"Lines: {lines}\nWords: {words}\nSize: {size} bytes"
+    with open(filename, "r") as f:
+        data = f.read()
+    lines = len(data.splitlines())
+    words = len(data.split())
+    size = os.path.getsize(filename)
+    result = f"Lines: {lines}\nWords: {words}\nSize: {size} bytes"
 else:
-result = "File does not exist"
+    result = "File does not exist"
 conn.send(result.encode())
 conn.close()
 server.close()
@@ -372,14 +608,16 @@ client.send(filename.encode())
 result = client.recv(1024).decode()
 print(result)
 client.close()
+
+
 Sample.txt:
 Hello world
 Cloud computing lab
 Python programming
+
+
 Berkeley's clock synchronization algorithm
-Implement Berkeley's algorithm to synchronize the clocks of multiple
-distributed systems by calculating their clock offsets and adjusting the
-clocks using the coordinator's calculated average time.
+Implement Berkeley's algorithm to synchronize the clocks of multiple distributed systems by calculating their clock offsets and adjusting the clocks using the coordinator's calculated average time.
 server.py
 import socket
 server = socket.socket()
@@ -392,14 +630,14 @@ connections = []
 print("Waiting for clients...")
 # Receive clock times
 for i in range(n):
-conn, addr = server.accept()
-connections.append(conn)
-time = int(conn.recv(1024).decode())
-clocks.append(time)
+    conn, addr = server.accept()
+    connections.append(conn)
+    time = int(conn.recv(1024).decode())
+    clocks.append(time)
 # Calculate clock offsets
 offsets = []
 for t in clocks:
-offsets.append(t - coordinator_time)
+    offsets.append(t - coordinator_time)
 print("Clock times:", clocks)
 print("Offsets:", offsets)
 # Calculate average offset
@@ -410,11 +648,13 @@ coordinator_time = coordinator_time + avg
 print("Synchronized coordinator clock:", coordinator_time)
 # Send adjustments to clients
 for i in range(n):
-adjustment = avg - offsets[i + 1]
-connections[i].send(str(adjustment).encode())
-print("Adjustment sent to client", i + 1, ":", adjustment)
-connections[i].close()
+    adjustment = avg - offsets[i + 1]
+    connections[i].send(str(adjustment).encode())
+    print("Adjustment sent to client", i + 1, ":", adjustment)
+    connections[i].close()
 server.close()
+
+
 client.py
 import socket
 host = input("Enter coordinator IP: ")
@@ -431,63 +671,66 @@ clock = clock + adjustment
 print("Adjustment:", adjustment)
 print("Synchronized clock:", clock)
 client.close()
+
+
 Physical clock drift simulation
-Simulate two clocks running on different systems. Assume both clocks start
-at the same time, but Clock B runs faster by 10 milliseconds per second.
-Write a Python program to simulate the drift over one minute and calculate
-how far apart the two clocks become.
+Simulate two clocks running on different systems. Assume both clocks start at the same time, but Clock B runs faster by 10 milliseconds per second. Write a Python program to simulate the drift over one minute and calculate how far apart the two clocks become.
 import time
 clock_a = 0.0
 clock_b = 0.0
 for i in range(60):
-time.sleep(1)
-clock_a += 1.0
-clock_b += 1.01
-drift = clock_b - clock_a
-print("Time:", i + 1, "seconds")
-print("Clock A:", round(clock_a, 2))
-print("Clock B:", round(clock_b, 2))
-print("Drift:", round(drift * 1000), "milliseconds")
-print()
+    time.sleep(1)
+    clock_a += 1.0
+    clock_b += 1.01
+    drift = clock_b - clock_a
+    print("Time:", i + 1, "seconds")
+    print("Clock A:", round(clock_a, 2))
+    print("Clock B:", round(clock_b, 2))
+    print("Drift:", round(drift * 1000), "milliseconds")
+    print()
 print("Final drift:", round(drift * 1000), "milliseconds")
+
+
 Round-robin task scheduler simulation
-There are two worker nodes. Create multiple tasks with different processing
-requirements. Assign tasks to each worker using the round-robin algorithm.
-Simulate the execution of each task, find its completion time, and print the
-number of tasks assigned to each worker.
+There are two worker nodes. Create multiple tasks with different processing requirements. Assign tasks to each worker using the round-robin algorithm. Simulate the execution of each task, find its completion time, and print the number of tasks assigned to each worker.
 # Round-Robin Task Scheduling with Two Workers
 tasks = [4, 2, 6, 3, 5]
 workers = [0, 0]
 count = [0, 0]
 print("Round-Robin Task Scheduling\n")
 for i in range(len(tasks)):
-# Assign tasks alternately
-w = i % 2
-# Start and completion times
-start_time = workers[w]
-completion_time = start_time + tasks[i]
-# Update worker's available time
-workers[w] = completion_time
-# Count assigned tasks
-count[w] += 1
-# Display task details
-print("Task:", i + 1)
-print("Processing time:", tasks[i])
-print("Assigned to Worker:", w + 1)
-print("Start time:", start_time)
-print("Completion time:", completion_time)
-print()
+    # Assign tasks alternately
+    w = i % 2
+    # Start and completion times
+    start_time = workers[w]
+    completion_time = start_time + tasks[i]
+    # Update worker's available time
+    workers[w] = completion_time
+    # Count assigned tasks
+    count[w] += 1
+    # Display task details
+    print("Task:", i + 1)
+    print("Processing time:", tasks[i])
+    print("Assigned to Worker:", w + 1)
+    print("Start time:", start_time)
+    print("Completion time:", completion_time)
+    print()
 # Display final results
 print("Total tasks assigned to Worker 1:", count[0])
 print("Total tasks assigned to Worker 2:", count[1])
 print("Worker 1 finishes at:", workers[0])
 print("Worker 2 finishes at:", workers[1])
-VM : Question in cron to set up two processes that run after 3 and 15 secs
-respectively and print their output in output.log.
+
+
+VM : Question in cron to set up two processes that run after 3 and 15 secs respectively and print their output in output.log.
 1. Create processes.sh
 #!/bin/bash
+
+
 (sleep 3; echo "Process 1 executed after 3 seconds" >> output.log) &
 (sleep 15; echo "Process 2 executed after 15 seconds" >> output.log) &
+
+
 wait
 2. Make the script executable
 chmod +x processes.sh
@@ -496,7 +739,498 @@ Open the crontab editor:
 crontab -e
 Add this line, replacing /full/path/to/processes.sh with the script's actual absolute path:
 * * * * * /bin/bash /full/path/to/processes.sh
-Important: This runs the script every minute. It does not run just once. For a lab demonstration,
-you can temporarily use this entry, verify the output, and remove the entry afterward.
+Important: This runs the script every minute. It does not run just once. For a lab demonstration, you can temporarily use this entry, verify the output, and remove the entry afterward.
 4. Check the output
 cat output.log
+
+
+
+
+
+VM Questions:
+
+Question 5:
+
+Part 1: Virtual Instances Management
+
+Task 1: Create and Configure Virtual Instances
+sudo apt update
+sudo apt install apache2 -y
+sudo systemctl enable apache2
+sudo systemctl status apache2
+sudo nano /var/www/html/index.html (make changes in this file)
+sudo apt install net-tools
+ifconfig
+
+Task 2: Implement Basic Load Balancing
+sudo apt install haproxy -y
+sudo nano /etc/haproxy/haproxy.cfg 
+
+Inside that file:
+frontend http_front
+  bind *:80
+  default_backend http_back
+backend http_back
+  balance roundrobin
+  server vm1 <VM1_IP>:80 check
+  server vm2 <VM2_IP>:80 check
+  server vm3 <VM3_IP>:80 check
+
+later,
+sudo systemctl restart haproxy
+sudo systemctl enable haproxy
+sudo systemctl status haproxy
+
+http://<load_balancer_IP>
+
+
+----------------------------------------------------------------------------------------------------------------------------------
+
+
+
+
+
+
+Part 2: Server Consolidation in VirtualBox – Simple Demonstration
+Aim: To consolidate services from two virtual machines into one VM, reduce resource usage, and verify that the service works correctly.
+Procedure
+Step 1: Open VirtualBox and identify VMs
+1. Open Oracle VirtualBox Manager.
+2. Identify two VMs: Ubuntu Server 1 and Ubuntu Server 2.
+3. Open each VM's Settings → System and note the allocated RAM and CPU.
+Step 2: Select the main VM
+Choose Ubuntu Server 1 as the consolidated server. It will host the website previously running on Server 2.
+Step 3: Install Apache and SSH
+On both VMs, open Terminal and run:
+sudo apt update
+sudo apt install apache2 openssh-server -y
+
+
+On Server 2, start SSH:
+sudo systemctl enable --now ssh
+
+
+Step 4: Create a website on Server 2
+On Ubuntu Server 2, run:
+echo "Website migrated from Server 2" > ~/index.html
+
+
+Find Server 2's IP address:
+hostname -I
+
+
+Note the IP address and the Ubuntu username of Server 2.
+Step 5: Migrate the website using SCP
+On Ubuntu Server 1, run the following command, replacing username and SERVER2_IP with the actual details of Server 2:
+scp username@SERVER2_IP:~/index.html /tmp/index.html
+
+
+Enter Server 2's password when prompted.
+Copy the transferred file into Apache's website directory:
+sudo cp /tmp/index.html /var/www/html/index.html
+
+
+Restart Apache:
+sudo systemctl restart apache2
+
+
+Step 6: Test the migrated website
+On Server 1, run:
+curl http://localhost
+
+
+Expected output:
+Website migrated from Server 2
+
+
+The website file has now been transferred to Server 1 and is being served by its Apache service.
+Step 7: Stop the old service
+After confirming the website works on Server 1, stop Apache on Server 2:
+sudo systemctl stop apache2
+
+
+Check that the website still works on Server 1:
+curl http://localhost
+
+
+Step 8: Check resource utilization
+On Server 1, run the following commands:
+Check CPU usage:
+top
+
+
+Check memory usage:
+free -h
+
+
+Check disk usage:
+df -h
+
+
+These commands display CPU activity, memory availability and disk utilization.
+Step 9: Power off and remove the unused VM
+1. Shut down Ubuntu Server 2.
+2. Keep it until you have verified the migration and backed up any required data.
+3. In VirtualBox Manager, right-click Server 2 and select Remove.
+4. Choose Remove Only to retain the VM files.
+Expected Result
+- Two VMs' workloads are consolidated onto one VM.
+- The website from Server 2 is migrated to Server 1 using SCP.
+- The website continues to work after the old Apache service is stopped.
+- CPU, memory and disk utilization are checked on the consolidated VM.
+- The redundant VM can be safely retired.
+Conclusion: Server consolidation was demonstrated by migrating a website from Ubuntu Server 2 to Ubuntu Server 1, verifying its operation, and monitoring the consolidated VM's resource utilization.
+
+
+
+
+----------------------------------------------------------------------------------------------------------------------------------
+
+
+
+
+# Part 3: Fault Tolerance in VirtualBox – Simple Notes
+
+Aim: To implement fault tolerance using VM cloning, data synchronization, and snapshots in Oracle VirtualBox.
+
+## Step 1: Create a Backup VM (Clone)
+
+1. Open VirtualBox Manager.
+2. Select the primary Ubuntu VM.
+3. Right-click and select Clone.
+4. Enter the name `Ubuntu-Backup`.
+5. Select Full Clone.
+6. Click Finish.
+
+Result: A separate backup VM is created.
+
+## Step 2: Synchronize Data Using rsync
+
+On both VMs, install SSH and rsync:
+
+
+sudo apt update
+sudo apt install openssh-server rsync -y
+
+
+On the Backup VM, start SSH:
+
+
+sudo systemctl enable --now ssh
+
+
+Find the Backup VM's IP address:
+
+
+hostname -I
+
+
+On the Primary VM, create a sample file:
+
+
+mkdir -p ~/important
+echo "Important backup data" > ~/important/data.txt
+
+
+Synchronize the file to the Backup VM. Replace `username` and `BACKUP_IP` with the actual details:
+
+
+rsync -av ~/important/ username@BACKUP_IP:~/important/
+
+
+On the Backup VM, verify the copied file:
+
+
+cat ~/important/data.txt
+
+
+Expected output:
+
+
+Important backup data
+
+
+Result: Data is copied from the Primary VM to the Backup VM.
+
+## Step 3: Take a Snapshot
+
+1. Open VirtualBox Manager.
+2. Select the Primary VM.
+3. Open the Snapshots view.
+4. Click Take.
+5. Enter the name `Pre-Consolidation Snapshot`.
+6. Click OK.
+
+Result: A snapshot of the VM's current state is saved.
+
+## Step 4: Test Snapshot Recovery
+
+Modify the file on the Primary VM:
+
+
+echo "Modified data" > ~/important/data.txt
+
+
+Restore the earlier snapshot:
+
+1. Shut down the VM.
+2. Open VirtualBox Manager and select the VM.
+3. Go to Snapshots.
+4. Select `Pre-Consolidation Snapshot`.
+5. Click Restore and confirm.
+6. Start the VM again.
+
+Check the file:
+
+
+cat ~/important/data.txt
+
+
+Expected output:
+
+
+Important backup data
+
+
+Result: The VM is restored to its earlier state.
+
+## Step 5: Test Backup Recovery
+
+1. Shut down the Primary VM.
+2. Start `Ubuntu-Backup`.
+3. Check the backup file:
+
+
+cat ~/important/data.txt
+
+
+4\. Confirm that the backup data is accessible.
+
+Result: The backup VM can be used if the primary VM fails.
+
+## Expected Result
+
+- A backup VM is created using Full Clone.
+- Data is synchronized using `rsync`.
+- Snapshots are created for quick recovery.
+- The primary VM can be restored to an earlier state.
+- The backup VM provides a recovery option if the primary VM fails.
+
+Conclusion: Fault tolerance is demonstrated using VM cloning, data synchronization, and snapshot-based recovery in VirtualBox.
+
+
+
+
+
+
+--------------------------------------------------------------------------------------------------------------------------------
+
+
+
+
+
+
+Use these commands in order to remove the duplicate IP and assign the correct IP address.
+
+ip -br addr
+sudo ip addr del 192.168.156.131/24 dev enp0s3
+sudo ip addr add 192.168.156.132/24 dev enp0s3
+sudo ip link set enp0s3 up
+ip -br addr
+
+Replace these values as needed:
+
+192.168.156.131/24 — the IP address you want to remove.
+
+192.168.156.132/24 — the IP address you want to assign.
+
+enp0s3 — your actual network interface name.
+
+Important: If both VMs are using the same IP, assign a unique IP to each VM. Do not assign .132 if another VM already uses it. These changes are temporary and may be lost after a reboot.
+
+
+Question 6:
+
+Part 1: Task Scheduling 
+Task 1: Implement Task Scheduling with Cloud Services 
+
+Create a script file using: nano script.sh : 
+nano script.sh
+Add: echo “Hello” 
+
+Open the cron file using the command: crontab -e 
+
+*/1 * * * * ./script.sh >> ./output.log ( Add this in cron file)
+
+tail -f /var/log/syslog | grep CRON
+
+for viewing output : cat /home/ubuntu/output.log
+
+Task 2: Implement Basic Load Balancing
+sudo apt install haproxy -y
+sudo nano /etc/haproxy/haproxy.cfg 
+
+Inside that file:
+frontend http_front
+  bind *:80
+  default_backend http_back
+backend http_back
+  balance roundrobin
+  server vm1 <VM1_IP>:80 check
+  server vm2 <VM2_IP>:80 check
+  server vm3 <VM3_IP>:80 check
+
+later,
+sudo systemctl restart haproxy
+sudo systemctl enable haproxy
+sudo systemctl status haproxy
+
+http://<load_balancer_IP>
+
+
+Part 3: Advanced Scheduling and Load Balancing (Optional)
+Task 1: Implement Advanced Scheduling with Prioritization
+
+script1.sh
+#!/bin/bash
+echo "Running CPU-intensive task in script 1"
+
+for i in {1..1000000}; do
+    echo -n "" > /dev/null
+done
+
+
+script2.sh
+#!/bin/bash
+echo "Logging system information in script 2"
+date >> ./logfile.log
+
+
+chmod +x script.sh
+chmod +x script2.sh
+
+crontab -e
+inside that file
+*/1 * * * * nice -n 10 ./script.sh >> ./output-pr.log
+*/1 * * * * nice -n -5 ./script2.sh >> ./output-pr.log
+
+cat output-pr.log
+
+
+
+Question 7:
+
+No. I included the main commands, but your PDF also contains cluster verification, HA testing, load balancing, and VM migration. Here is the complete command list in your requested format, based on your Exercise 7 PDF.
+
+Part 1: Setting Up a Hypervisor Cluster
+
+Task 1: Set Up Hypervisor Hosts
+
+Create two or more VMs in VMware Workstation and install Proxmox VE on each.
+
+apt update
+
+ip a
+
+ping
+
+Task 2: Configure Hypervisor Clustering
+
+In the Proxmox web interface: Datacenter → Cluster → Create Cluster (on the first host)
+
+Join Cluster (on the second host)
+
+pvecm status
+
+pvecm nodes
+
+ping
+
+ping
+
+Part 2: Implement High Availability and Load Balancing
+
+Task 1: Configure High Availability for VMs
+
+In the Proxmox web interface: Datacenter → HA
+
+Add the VMs that should restart automatically when a host fails.
+
+ha-manager status
+
+pvecm status
+
+qm list
+
+Test HA by powering down one hypervisor host and checking whether the VM restarts on another host.
+
+Task 2: Implement Load Balancing
+
+qm list
+
+pvecm nodes
+
+free -h
+
+top
+
+In the Proxmox web interface: Configure resource distribution policies and monitor CPU and memory usage.
+
+To migrate a VM manually:
+
+qm migrate
+
+
+
+
+
+
+------------------------------------------------------------------------------------------------------------------------
+
+
+(VM1 - pve VM2 - pve2)
+
+Task 1: clustering
+
+first install hypervisor
+in both vms
+
+then in each vm:
+hostname -I
+
+then in browser:
+https://<1st VM IP>:8006
+click on advanced, continue to, and go to proxmox
+
+type username (root) and password and enter proxmox
+
+go to datacenter -> cluster -> create cluster -> cluster name (cloud) -> create (wait till TASK OK comes)
+go to join information -> copy the join information -> https://<2nd VM IP>:8006 -> same as above -> datacenter -> cluster -> join cluster -> paste the join information -> type the password -> then go to 1st VM's proxmox and check if the join is successful
+
+now in VMware:
+in 1st VM:
+ping <2nd VM IP>
+
+
+Task 2: implement High Availability (HA) and load balancing
+
+back to browser for 1st VM:
+right click on pve -> create VM - > name it vm1 -> in OS select Don't use any media -> in Disk change RAM to 2GB -> next next finish  -> repeat for pve2 (right click on pve2 -> create VM - > name it vm2 -> in OS select Don't use any media -> in Disk change RAM to 2GB -> next next finish)
+
+click on datacenter -> HA -> add -> choose vm1 (ensure request state is started) -> add -> repeat for 2nd vm (vm2)
+
+both VMs quorum status is OK
+
+in HA page -> CIRS Settings
+HA -> affinity rules -> HA Node Affinity Rule -> Add -> Enable ticked, strict unticked -> 1st vm (vm1) as resource, tick 1st pve and set priority as 2 -> then tick pve2 and set priority 1 -> Add
+repeat the same for next vm as resource (vm2)
+
+datacenter -> summary 
+
+HA -> Affinity Rules -> Untick enable for both of the vms before migration
+
+
+Task 3: Migrating VM
+
+datacenter -> expand pve -> right click vm1 -> migrate -> target is pve2 -> migrate
+checking: HA -> vm1 will be in pve2
